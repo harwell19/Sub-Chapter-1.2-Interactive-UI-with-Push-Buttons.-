@@ -1,0 +1,96 @@
+/*
+Project: 
+Sub-Chapter 2.1 - Non-Blocking multi-pages Menu System
+Author: Harwell Mejia
+Tutor: GEMINI and ChatGPT
+Hardware:
+- Arduino UNO
+- LCD 16x2 I2C
+- BTN_NAV on Pin 2 (GND when pressed)
+Compiled and run in Wokwi
+*/
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+#define BTN_NAV_PIN 2 //Navigator push button
+//==State variables - using in menu system==
+int currentPage = 0;
+const int totalPagesNumber = 3;
+bool isPageChanged = true;
+
+//==Navigator push button - non-blocking timer
+bool lastNAVRead = HIGH;
+bool stableNAVState = HIGH;
+
+unsigned long NAVbounceTime = 0;
+const unsigned long NAVdebounceDelay = 50; //time in millisecons
+
+void setup(){
+  Serial.begin(115200);
+  pinMode(BTN_NAV_PIN, INPUT_PULLUP);
+  lcd.begin(16,2);
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("HI");
+}
+
+void loop(){
+  //=== Task 1 - Non-blocking toggle timer ===
+  //1.1 Reading electrical signal
+  bool currentNAVRead = digitalRead(BTN_NAV_PIN);
+
+  //1.2 Detect electrical change
+  if(currentNAVRead != lastNAVRead){
+    lastNAVRead = currentNAVRead;
+    NAVbounceTime = millis();
+  }
+
+  //1.3 Check debounce time
+  unsigned long currentNAVTime = millis();
+  if(currentNAVTime - NAVbounceTime >= NAVdebounceDelay){
+
+    //1.4 Detect stable state
+    if(currentNAVRead != stableNAVState){
+      stableNAVState = currentNAVRead;
+
+      // Validate button press
+      if(stableNAVState == LOW){
+        isPageChanged = true;
+        currentPage = (currentPage + 1) % totalPagesNumber;
+      }
+    }
+  }
+
+  // === Task 2 - State-driven UI **Runs only on page changes ===
+  if(isPageChanged){
+    isPageChanged = false; //Reset flag
+    lcd.clear(); // Clear display when page transition
+
+    switch(currentPage){
+      case 0:
+      lcd.setCursor(0,0);
+      lcd.print("Hi Arduino!");
+      lcd.setCursor(0,1);
+      lcd.print("System: ON");
+      break;
+
+      case 1:
+      lcd.setCursor(0,0);
+      lcd.print("Temp: 35degC");
+      lcd.setCursor(0,1);
+      lcd.print("Humidity: 45%");
+      break;
+
+      case 2:
+      lcd.setCursor(0,0);
+      lcd.print("Water Temp: 65degC");
+      lcd.setCursor(0,1);
+      lcd.print("Max temp: 80degC");
+      break;
+      
+    }
+  }
+}
