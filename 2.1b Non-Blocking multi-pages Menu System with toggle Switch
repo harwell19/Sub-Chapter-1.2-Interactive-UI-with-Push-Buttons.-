@@ -1,0 +1,156 @@
+/*
+Project: 
+Sub-Chapter 2.1b - Non-Blocking multi-pages Menu System with toggle Switch
+Author: Harwell Mejia
+Tutor: GEMINI and ChatGPT
+Hardware:
+- Arduino UNO
+- LCD 16x2 I2C
+- BTN_NAV on Pin 2 (GND when pressed)
+Compiled and run in Wokwi
+*/
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+#define BTN_SWT	2
+#define BTN_NAV 3
+#define redLed 4
+#define greenLed 5
+
+//==State variables==
+bool systemState = LOW;
+
+//==Dynamic toggle menu - LCD
+bool isPageChanged = true; 
+int currentPage = 0;
+const int totalPagesNum = 5;
+
+//==Toggle switch non-blocking timer parameters ==
+bool lastSWTRead = HIGH;
+bool stableSWTState = HIGH;
+unsigned long SWTbounceTime = 0;
+const unsigned long SWTdebounceDelay = 50;
+
+//==Navigation button non-blocking timerparameters==
+bool lastNAVRead = HIGH;
+bool stableNAVState = HIGH;
+unsigned long NAVbounceTime = 0;
+const unsigned long NAVdebounceDelay = 50;
+
+void setup(){
+  Serial.begin(115200);
+  pinMode(BTN_SWT, INPUT_PULLUP);
+  pinMode(BTN_NAV, INPUT_PULLUP);
+  pinMode(redLed, OUTPUT);
+  pinMode(greenLed, OUTPUT);
+  
+  lcd.init();
+  lcd.backlight();
+  
+  digitalWrite(greenLed, systemState);
+  digitalWrite(redLed, !systemState);
+}
+
+void loop(){
+  //== Task 1 - Non-blocking timer Toggle switch == 
+  bool currentSWTRead = digitalRead(BTN_SWT);
+  if(currentSWTRead != lastSWTRead){
+    lastSWTRead = currentSWTRead;
+    SWTbounceTime = millis();
+  }
+  
+  unsigned long currentSWTtime = millis();
+  if(currentSWTtime - SWTbounceTime >= SWTdebounceDelay){
+    if(currentSWTRead != stableSWTState){
+      stableSWTState = currentSWTRead;
+      
+      if(stableSWTState == LOW){
+        systemState = !systemState;
+        digitalWrite(greenLed, systemState);
+        digitalWrite(redLed, !systemState);
+        
+        if(systemState == HIGH){
+          currentPage = 0;
+          isPageChanged = true;
+        }
+        
+        else{
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.print("System: OFF");
+          lcd.setCursor(1,5);
+          lcd.print("Good Bye");
+          
+        }
+      }
+    }
+  }
+  //== Task 2 - Activate Navigation button when system is ON ==
+  if(systemState == HIGH){
+    // ==Non-blocking timer toggle NAV
+    bool currentNAVRead = digitalRead(BTN_NAV);
+    
+    if(currentNAVRead != lastNAVRead){
+      lastNAVRead = currentNAVRead;
+      NAVbounceTime = millis();
+    }
+    
+    unsigned long currentNAVTime = millis();
+    
+    if(currentNAVTime - NAVbounceTime >= NAVdebounceDelay){
+      if(currentNAVRead != stableNAVState){
+        stableNAVState = currentNAVRead;
+        
+        if(stableNAVState == LOW){
+          isPageChanged = true;
+          currentPage = (currentPage + 1) % totalPagesNum;
+        }
+      }
+    }
+    
+    //== Tak 3 - IU Navigation in LCD ==
+    if(isPageChanged){
+      isPageChanged = false;
+      lcd.clear();
+      
+      switch(currentPage){
+        case 0:
+        lcd.setCursor(0,0);
+        lcd.print("System: ");
+        lcd.setCursor(3,1);
+        lcd.print("Ready");
+        break;
+        
+        case 1:
+        lcd.setCursor(0,0);
+        lcd.print("Room Temp: ");
+        lcd.setCursor(3,1);
+        lcd.print("35 degC");
+        break;
+        
+        case 2: 
+        lcd.setCursor(0,0);
+        lcd.print("Humidity: ");
+        lcd.setCursor(3,1);
+        lcd.print("50%");
+        break;
+        
+        case 3:
+        lcd.setCursor(0,0);
+        lcd.print("Water temp: ");
+        lcd.setCursor(3,1);
+        lcd.print("60degC");
+        break;
+        
+        case 4:
+        lcd.setCursor(0,0);
+        lcd.print("UV Level: ");
+        lcd.setCursor(3,1);
+        lcd.print("85");
+        break;
+      }        
+    }
+  }
+}
