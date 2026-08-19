@@ -1,0 +1,155 @@
+/*
+Project: 
+Sub-Chapter 2.1b - Non-Blocking Parameter tunning in LCD
+Feature:
+LCD menu refresh with navigator push button, and parameter's tunnig
+push button for one page of the menu
+Author: Harwell Mejia
+Tutor: GEMINI and ChatGPT
+Hardware:
+- Arduino UNO
+- LCD 16x2 I2C
+- Push button x3
+Compiled and run in ThinkerCad
+*/
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+#define BTN_NAV_PIN 2
+#define BTN_UP_PIN 3
+#define BTN_DOWN_PIN 4
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+//==State variables==
+bool isPageChanged = true;
+int currentPage = 0;
+const int totalPageNum = 3;
+
+bool isTempSetChanged = true;
+int minTempSet = 30;
+int maxTempSet = 60;
+int tempVal = 40;
+
+//==Non-blocking debounce time for buttons
+bool lastNAV_BTN_Read = HIGH;  //Navigator button
+bool stableNAVState = HIGH;
+unsigned long navBounceTime = 0;
+const unsigned long navDebounceDelay = 50;
+
+bool lastUpRead = HIGH;      // Tunning parameter UP button
+bool stableUpState = HIGH;
+unsigned long upBounceTime = 0;
+
+bool lastDownRead = HIGH;    // Tunning parameter DOWN button
+bool stableDownState = HIGH;
+unsigned long downBounceTime = 0;
+
+const unsigned long SET_BTN_DebounceDelay = 50;
+
+void setup(){
+  Serial.begin(115200);
+  pinMode(BTN_NAV_PIN, INPUT_PULLUP);
+  pinMode(BTN_UP_PIN, INPUT_PULLUP);
+  pinMode(BTN_DOWN_PIN, INPUT_PULLUP);
+  
+  lcd.init();
+  lcd.backlight();
+}
+
+void loop(){
+  //===Task 1 - Activate the NAVIGATOR toggle button
+  //1.1 Reading electrical signal
+  bool currentBTN_NAV_Read = digitalRead(BTN_NAV_PIN);
+  
+  //1.2 detect electrical signal change
+  if(currentBTN_NAV_Read != lastNAV_BTN_Read){
+    lastNAV_BTN_Read = currentBTN_NAV_Read;
+    navBounceTime = millis();
+  }
+  
+  //1.3 Check the non-blocking timer
+  unsigned long currentNAVTime = millis();
+  if(currentNAVTime - navBounceTime >= navDebounceDelay){
+    
+    //1.4 Detect stable state
+    if(currentBTN_NAV_Read != stableNAVState){
+      stableNAVState = currentBTN_NAV_Read;
+      
+      //1.5 Valid button press
+      if(stableNAVState == LOW){
+        isPageChanged = true;
+        currentPage = (currentPage + 1) % totalPageNum;
+        Serial.println(currentPage);
+      }
+    }
+  }
+  
+  //===Task 2 - Activate **UP** Tunning parameter toggle button for PAGE 2 (count: 0, 1 & 2)
+  if(currentPage == 1){
+    //Note: Same 5 steps of the NAVIGATOR toggle button
+    bool currentUpRead = digitalRead(BTN_UP_PIN);
+    if(currentUpRead != lastUpRead){
+      lastUpRead = currentUpRead;
+      upBounceTime = millis();
+    }
+    unsigned long SET_BTN_Time = millis();
+    if(SET_BTN_Time - upBounceTime >= SET_BTN_DebounceDelay){
+      if(currentUpRead != stableUpState){
+        stableUpState = currentUpRead;
+        if(stableUpState == LOW){
+          tempVal = constrain(tempVal + 1, minTempSet, maxTempSet);
+          isTempSetChanged = true;
+          Serial.println(tempVal);          
+        }
+      }
+    }
+    //===Task 3 - Activate **DOWN** Tunning parameter toggle button for PAGE 2 (count: 0, 1 & 2)
+    bool currentDownRead = digitalRead(BTN_DOWN_PIN);
+    if(currentDownRead != lastDownRead){
+      lastDownRead = currentDownRead;
+      downBounceTime = millis();
+    }
+    if(SET_BTN_Time - downBounceTime >= SET_BTN_DebounceDelay){
+      if(currentDownRead != stableDownState){
+        stableDownState = currentDownRead;
+        if(stableDownState == LOW){
+          tempVal = constrain(tempVal - 1, minTempSet, maxTempSet);
+          isTempSetChanged = true;
+          Serial.println(tempVal); 
+        }
+      }
+    }//Close check debounce time
+  } // Close currentPage == 1
+  
+  //===Task 4 - State-driven UI **Runs only on page changes ===
+    if(isPageChanged || isTempSetChanged){
+      isPageChanged = false;
+      isTempSetChanged = false;
+      lcd.clear();
+    
+      switch(currentPage){
+       case 0:
+        lcd.setCursor(0,0);
+        lcd.print("System: ");
+        lcd.setCursor(5,1);
+        lcd.print("Ready");
+        break;
+      
+       case 1:
+        lcd.setCursor(0,0);
+        lcd.print("Set Temp: ");
+        lcd.setCursor(5,1);
+        lcd.print(tempVal);
+        lcd.print((char)176);
+        break;
+      
+       case 2:
+        lcd.setCursor(0,0);
+        lcd.print("Room temp: ");
+        lcd.setCursor(5,1);
+        lcd.print("25 degC");
+       break;
+    }
+  }
+}
